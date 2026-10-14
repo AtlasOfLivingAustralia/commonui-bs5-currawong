@@ -862,6 +862,7 @@ body.background-lightgrey {
                     opacity: 0.3;
                     transform: rotateX(-90deg);
                     transform-origin: top center;
+                    z-index: 50;
 
                     .container {
                         margin-top: 2.2rem;
