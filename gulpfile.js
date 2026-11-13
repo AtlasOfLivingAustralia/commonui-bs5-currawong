@@ -9,7 +9,6 @@ var gulp = require('gulp'),
     streamSeries = require('stream-series'),
     del = require('del'),
     fs = require('fs'),
-    vinylPaths = require('vinyl-paths'),
     buildvars = require('./buildvars.js');
 
 var cssHash = '', jsHash = '';
