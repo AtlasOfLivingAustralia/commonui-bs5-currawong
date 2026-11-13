@@ -9,6 +9,7 @@ var gulp = require('gulp'),
     streamSeries = require('stream-series'),
     del = require('del'),
     fs = require('fs'),
+    vinylPaths = require('vinyl-paths'),
     buildvars = require('./buildvars.js');
 
 var cssHash = '', jsHash = '';
@@ -137,10 +138,10 @@ function cleanOldAssets(cb) {
     cb();
 }
 
-function testHTMLPage() {
+function testHTMLPage(cb) {
     var header = fs.readFileSync('source/html/banner.mustache');
     var footer = fs.readFileSync('source/html/footer.mustache');
-    return src(paths.testHtml.src)
+    src(paths.testHtml.src)
         .pipe(replace('HEADER_HERE', header))
         .pipe(replace('FOOTER_HERE', footer))
         .pipe(replace(/{{loginStatus}}/g, 'signedOut'))
@@ -152,11 +153,12 @@ function testHTMLPage() {
         .pipe(replace(/{{profileURL}}/g, buildvars.profileURL))
         .pipe(replace(/{{fathomID}}/g, buildvars.fathomID))
         .pipe(dest(paths.html.dest));
+    cb();
 };
 
-function generateHandlebars() {
+function generateHandlebars(cb) {
     ensureHashes();
-    return src(paths.html.src)
+    src(paths.html.src)
         .pipe(replace(/{{loginStatus}}/g, 'signedOut'))
         .pipe(replace(/{{homeDomain}}/g, '{{ homeDomain }}'))
         .pipe(replace(/{{signUpURL}}/g, '{{ signUpURL }}'))
@@ -166,11 +168,19 @@ function generateHandlebars() {
         .pipe(replace(/{{jsCacheBuster}}/g, jsHash))
         .pipe(rename({extname: '.hbs'}))
         .pipe(dest(paths.html.dest));
+    cb();
 }
 
-function html() {
+function cleanHtml() {
+    return del([
+        'build/*.mustache',
+        'build/*.hbs'
+    ]);
+}
+
+function html(cb) {
     ensureHashes();
-    return src(paths.html.src)
+    src(paths.html.src)
         .pipe(replace(/{{homeDomain}}/g, buildvars.homeDomain))
         .pipe(replace(/{{signUpURL}}/g, buildvars.signUpURL))
         .pipe(replace(/{{profileURL}}/g, buildvars.profileURL))
@@ -178,44 +188,50 @@ function html() {
         .pipe(replace(/{{cssCacheBuster}}/g, cssHash))
         .pipe(replace(/{{jsCacheBuster}}/g, jsHash))
         .pipe(dest(paths.html.dest));
+    cb();
 }
 
-function images() {
-    return src(paths.images.src, {encoding: false})
+function images(cb) {
+    src(paths.images.src, {encoding: false})
         .pipe(dest(paths.images.dest));
+    cb();
 }
 
-function jQuery() {
-    return src(paths.js.jquery, { sourcemaps: true })
+function jQuery(cb) {
+    src(paths.js.jquery, { sourcemaps: true })
         .pipe(uglify({output: {comments: '/^!/'}}))
         .pipe(rename('jquery.min.js'))
         .pipe(dest(paths.js.dest, { sourcemaps: '.' }));
+    cb();
 }
 
-function bootstrapJS() {
-    return src(paths.js.bootstrap, { sourcemaps: true })
+function bootstrapJS(cb) {
+    src(paths.js.bootstrap, { sourcemaps: true })
         .pipe(uglify({output: {comments: '/^!/'}}))
         .pipe(rename('bootstrap.min.js'))
         .pipe(dest(paths.js.dest, { sourcemaps: '.' }));
+    cb();
 }
 
-function autocompleteJS() {
-    return src(paths.js.jqueryui, { sourcemaps: true })
+function autocompleteJS(cb) {
+    src(paths.js.jqueryui, { sourcemaps: true })
         .pipe(uglify({output: {comments: '/^!/'}}))
         .pipe(rename('autocomplete.min.js'))
         .pipe(dest(paths.js.dest, { sourcemaps: '.' }));
+    cb();
 }
 
-function otherJsFiles() {
-    return src(paths.js.src, { sourcemaps: true })
+function otherJsFiles(cb) {
+    src(paths.js.src, { sourcemaps: true })
         .pipe(dest(paths.js.dest))
         .pipe(babel({presets: ['@babel/preset-env']}))
         .pipe(uglify({output: {comments: '/^!/'}}))
         .pipe(rename({extname: '.min.js'}))
         .pipe(dest(paths.js.dest, { sourcemaps: '.' }));
+    cb();
 }
 
-function combinedJS() {
+function combinedJS(cb) {
     const { finished } = require('stream/promises');
 
     // Standard un-minified
@@ -230,10 +246,10 @@ function combinedJS() {
         .pipe(rename('ala-combined.min.js'))
         .pipe(dest(paths.js.dest, { sourcemaps: '.' }));
 
-    return Promise.all([finished(stream1), finished(stream2)]);
+    return Promise.all([finished(stream1), finished(stream2)]).then(() => cb());
 }
 
-function buildCSS() {
+function buildCSS(cb) {
     const { finished } = require('stream/promises');
 
     // Standard un-minified
@@ -256,15 +272,15 @@ function buildCSS() {
         .pipe(rename({extname: '.min.css'}))
         .pipe(dest(paths.styles.dest, { sourcemaps: '.' }));
         
-    return Promise.all([finished(stream1), finished(stream2)]);
+    return Promise.all([finished(stream1), finished(stream2)]).then(() => cb());
 }
 
-function delCSS() {
+function delCSS(cb) {
     return del([
         'build/css/ala-combined.css', 
         'build/css/ala-combined.min.css',
         'build/css/ala-combined.min.css.map'
-    ]);
+    ]).then(() => cb());
 }
 
 var oldjs = parallel(jQuery, bootstrapJS, autocompleteJS, otherJsFiles);
@@ -275,7 +291,7 @@ var css = series(delCSS, buildCSS);
 
 var assets = parallel(css, js);
 
-var postAssets = series(hashAssets, parallel(testHTMLPage, html, generateHandlebars, images));
+var postAssets = series(hashAssets, parallel(testHTMLPage, cleanHtml, html, generateHandlebars, images));
 
 var build = series(cleanOldAssets, assets, postAssets);
 
@@ -284,7 +300,7 @@ exports.cleanOldAssets = cleanOldAssets;
 exports.delCSS = delCSS;
 exports.hashAssets = hashAssets;
 exports.css = css;
-exports.html = series([testHTMLPage, html]);
+exports.html = series([testHTMLPage, cleanHtml, html]);
 exports.images = images;
 exports.hbs = generateHandlebars;
 exports.oldjs = oldjs;
