@@ -9,6 +9,7 @@ var gulp = require('gulp'),
     streamSeries = require('stream-series'),
     del = require('del'),
     fs = require('fs'),
+    { Transform } = require('stream'),
     buildvars = require('./buildvars.js');
 
 var cssHash = '', jsHash = '';
@@ -137,10 +138,24 @@ function cleanOldAssets(cb) {
     cb();
 }
 
-function testHTMLPage(cb) {
+function touchFile() {
+    return new Transform({
+        objectMode: true,
+        transform(file, enc, cb) {
+            if (file.stat) {
+                const now = new Date();
+                file.stat.atime = now;
+                file.stat.mtime = now;
+            }
+            cb(null, file);
+        }
+    });
+}
+
+function testHTMLPage() {
     var header = fs.readFileSync('source/html/banner.mustache');
     var footer = fs.readFileSync('source/html/footer.mustache');
-    src(paths.testHtml.src)
+    return src(paths.testHtml.src)
         .pipe(replace('HEADER_HERE', header))
         .pipe(replace('FOOTER_HERE', footer))
         .pipe(replace(/{{loginStatus}}/g, 'signedOut'))
@@ -151,13 +166,13 @@ function testHTMLPage(cb) {
         .pipe(replace(/{{signUpURL}}/g, buildvars.signUpURL))
         .pipe(replace(/{{profileURL}}/g, buildvars.profileURL))
         .pipe(replace(/{{fathomID}}/g, buildvars.fathomID))
+        .pipe(touchFile())
         .pipe(dest(paths.html.dest));
-    cb();
-};
+}
 
-function generateHandlebars(cb) {
+function generateHandlebars() {
     ensureHashes();
-    src(paths.html.src)
+    return src(paths.html.src)
         .pipe(replace(/{{loginStatus}}/g, 'signedOut'))
         .pipe(replace(/{{homeDomain}}/g, '{{ homeDomain }}'))
         .pipe(replace(/{{signUpURL}}/g, '{{ signUpURL }}'))
@@ -166,8 +181,8 @@ function generateHandlebars(cb) {
         .pipe(replace(/{{cssCacheBuster}}/g, cssHash))
         .pipe(replace(/{{jsCacheBuster}}/g, jsHash))
         .pipe(rename({extname: '.hbs'}))
+        .pipe(touchFile())
         .pipe(dest(paths.html.dest));
-    cb();
 }
 
 function cleanHtml() {
@@ -177,57 +192,52 @@ function cleanHtml() {
     ]);
 }
 
-function html(cb) {
+function html() {
     ensureHashes();
-    src(paths.html.src)
+    return src(paths.html.src)
         .pipe(replace(/{{homeDomain}}/g, buildvars.homeDomain))
         .pipe(replace(/{{signUpURL}}/g, buildvars.signUpURL))
         .pipe(replace(/{{profileURL}}/g, buildvars.profileURL))
         .pipe(replace(/{{fathomID}}/g, buildvars.fathomID))
         .pipe(replace(/{{cssCacheBuster}}/g, cssHash))
         .pipe(replace(/{{jsCacheBuster}}/g, jsHash))
+        .pipe(touchFile())
         .pipe(dest(paths.html.dest));
-    cb();
 }
 
-function images(cb) {
-    src(paths.images.src, {encoding: false})
+function images() {
+    return src(paths.images.src, {encoding: false})
         .pipe(dest(paths.images.dest));
-    cb();
 }
 
-function jQuery(cb) {
-    src(paths.js.jquery, { sourcemaps: true })
+function jQuery() {
+    return src(paths.js.jquery, { sourcemaps: true })
         .pipe(uglify({output: {comments: '/^!/'}}))
         .pipe(rename('jquery.min.js'))
         .pipe(dest(paths.js.dest, { sourcemaps: '.' }));
-    cb();
 }
 
-function bootstrapJS(cb) {
-    src(paths.js.bootstrap, { sourcemaps: true })
+function bootstrapJS() {
+    return src(paths.js.bootstrap, { sourcemaps: true })
         .pipe(uglify({output: {comments: '/^!/'}}))
         .pipe(rename('bootstrap.min.js'))
         .pipe(dest(paths.js.dest, { sourcemaps: '.' }));
-    cb();
 }
 
-function autocompleteJS(cb) {
-    src(paths.js.jqueryui, { sourcemaps: true })
+function autocompleteJS() {
+    return src(paths.js.jqueryui, { sourcemaps: true })
         .pipe(uglify({output: {comments: '/^!/'}}))
         .pipe(rename('autocomplete.min.js'))
         .pipe(dest(paths.js.dest, { sourcemaps: '.' }));
-    cb();
 }
 
-function otherJsFiles(cb) {
-    src(paths.js.src, { sourcemaps: true })
+function otherJsFiles() {
+    return src(paths.js.src, { sourcemaps: true })
         .pipe(dest(paths.js.dest))
         .pipe(babel({presets: ['@babel/preset-env']}))
         .pipe(uglify({output: {comments: '/^!/'}}))
         .pipe(rename({extname: '.min.js'}))
         .pipe(dest(paths.js.dest, { sourcemaps: '.' }));
-    cb();
 }
 
 function combinedJS(cb) {
@@ -290,7 +300,7 @@ var css = series(delCSS, buildCSS);
 
 var assets = parallel(css, js);
 
-var postAssets = series(hashAssets, parallel(testHTMLPage, cleanHtml, html, generateHandlebars, images));
+var postAssets = series(hashAssets, cleanHtml, parallel(testHTMLPage, html, generateHandlebars, images));
 
 var build = series(cleanOldAssets, assets, postAssets);
 
